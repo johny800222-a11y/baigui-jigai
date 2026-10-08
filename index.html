@@ -1,3 +1,14 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#15100c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="百鬼祭改錄">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
 <title>百鬼祭改錄</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -258,6 +269,7 @@ body.joy-idle #joy-base,body.joy-idle #joy-knob{opacity:.55}
 #xf-close{background:rgba(255,250,236,.6);color:var(--ink)}
 .xf-msg{color:var(--zhu);min-height:1.4em}
 </style>
+</head><body>
 <div id="app">
   <div id="corner"><button type="button" id="fs-btn" aria-label="全螢幕">⛶ 全螢幕</button><button type="button" id="mute2" aria-label="音效開關">音效 開</button></div>
   <div id="rotate-hint" role="status"><b>↻</b><span>建議橫向遊玩：畫面更大、按鍵在兩側</span><button type="button" id="rh-close">知道了</button></div>
@@ -9488,6 +9500,24 @@ saveGame=function(){ G.savedAt=Date.now(); const ok=_saveGameLocal(); if(ok) clo
 // 曾經登入過的裝置，開機就恢復登入
 try{ if(cloudSupported() && localStorage.getItem('bgjg_cloud')==='1') setTimeout(cloudInit,800); }catch(e){}
 
+// ===================== 安裝成 App（真正全螢幕）：手機瀏覽器網址列無法用網頁程式隱藏，只有「加到主畫面」能全螢幕 =====================
+const PWA={evt:null};
+function isStandalone(){ return (window.matchMedia&&(matchMedia('(display-mode: fullscreen)').matches||matchMedia('(display-mode: standalone)').matches))||navigator.standalone===true; }
+function isIOS(){ return /iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1); }
+function pwaSupported(){ return /^https?:$/.test(location.protocol) && !/claude\.ai|claudeusercontent|anthropic/.test(location.hostname); }
+function pwaWanted(){ return pwaSupported() && !isStandalone() && (matchMedia('(pointer:coarse)').matches||isIOS()); }
+addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); PWA.evt=e; });
+addEventListener('appinstalled',()=>{ PWA.evt=null; });
+if(pwaSupported()&&'serviceWorker' in navigator) addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+function pwaLabel(){ return '安裝成App（全螢幕）'; }
+async function pwaMenu(){
+  if(PWA.evt){ const r=await ask('把遊戲裝到手機主畫面？\n之後從桌面圖示開啟，就是沒有網址列的全螢幕。',['安裝','取消']); UI.showBox(false);
+    if(r===0){ try{ PWA.evt.prompt(); await PWA.evt.userChoice; }catch(e){} PWA.evt=null; } return; }
+  if(isIOS()){ await say(['iPhone／iPad 要這樣做才能全螢幕：','1. 用 Safari 開啟這個網頁\n2. 點下方（或右上）的「分享」圖示\n3. 選「加入主畫面」→「新增」','之後從桌面的「百鬼祭改錄」圖示開啟，就是沒有網址列的全螢幕，也可以橫向遊玩。']); }
+  else { await say(['Android 要這樣做才能全螢幕：','1. 用 Chrome 開啟這個網頁\n2. 點右上角「⋮」選單\n3. 選「安裝應用程式」或「加到主畫面」','之後從桌面圖示開啟，就是全螢幕。']); }
+  UI.showBox(false);
+}
+
 // ===================================================================
 // opening3d.js — 3D 電影開場（three.js r128 global build，延遲載入）
 // 鏡頭：①月夜閩南聚落 ②百鬼夜行 ③④鬼門關封印裂開
@@ -12745,6 +12775,7 @@ async function mainMenu(){
     opts.push(['自訂鬼怪圖',customArtMenu]);
     opts.push([G.name,trainerCard]);
     opts.push([accountLabel(),async()=>{ const got=await accountMenu({inGame:true}); if(got){ await fade(true,300); loadMap(G.map,G.x,G.y,G.dir); W.scene='world'; await fade(false,300); } }]);
+    if(pwaWanted()) opts.push([pwaLabel(),pwaMenu]);
     opts.push(['存檔轉移',saveTransferMenu]);
     opts.push(['存檔',async()=>{ const ok=await ask('要記錄目前的進度嗎？'); if(ok===0){ if(saveGame()){ Audio.sfx('item'); await say('{name}把今天的經歷寫進了陰陽契約書。\n（進度已存檔）'); } else await say('這個瀏覽器無法存檔……'); } UI.showBox(false); }]);
     opts.push([`音效：${Audio.on?'開':'關'}`,async()=>{ Audio.init(); Audio.toggle(); }]);
@@ -13366,7 +13397,7 @@ async function titleScreen(){
   Audio.init(); Audio.cur=null; Audio.play('title');
   press.hidden=true;
   while(true){
-    const opts=[]; if(hasSave()) opts.push('繼續旅程'); opts.push('新的旅程'); opts.push('自訂鬼怪圖'); opts.push(accountLabel()); opts.push('匯入存檔'); opts.push(`音效：${Audio.on?'開':'關'}`); opts.push(musicStyleLabel()); opts.push(viewLabel());
+    const opts=[]; if(hasSave()) opts.push('繼續旅程'); opts.push('新的旅程'); opts.push('自訂鬼怪圖'); opts.push(accountLabel()); if(pwaWanted()) opts.push(pwaLabel()); opts.push('匯入存檔'); opts.push(`音效：${Audio.on?'開':'關'}`); opts.push(musicStyleLabel()); opts.push(viewLabel());
     const r=await choose(opts,{cls:'title-menu',cancel:false});
     const pick=opts[r];
     if(pick==='繼續旅程'){ if(CLOUD.ready&&CLOUD.user){ try{ const doc=await cloudFetch(), loc=localSaveInfo(); if(doc&&(!loc||(doc.t||0)>(loc.t||0)+2000)){ const c=await ask(`雲端有較新的存檔：\n【${doc.name}】徽章${doc.badges}枚・${fmtTime(doc.t)}\n要讀取嗎？`,['讀取雲端','用本機的']); UI.showBox(false); if(c===0){ await applyCloudSave(doc); } } }catch(e){} }
@@ -13375,6 +13406,7 @@ async function titleScreen(){
       if(hasSave()){ typeText('開始新的旅程，會覆蓋掉舊的存檔喔。\n確定嗎？',{wait:false}); const c=await choose(['確定','算了'],{cls:'yesno'}); UI.showBox(false); if(c!==0) continue; }
       tu.hidden=true; await newGame(); return;
     }
+    else if(pick===pwaLabel()){ tu.hidden=true; await pwaMenu(); tu.hidden=false; }
     else if(pick.startsWith('帳號')){ tu.hidden=true; const got=await accountMenu(); tu.hidden=false; if(got){ tu.hidden=true; await fade(true,300); loadMap(G.map,G.x,G.y,G.dir); W.scene='world'; await fade(false,300); return; } }
     else if(pick==='匯入存檔'){ tu.hidden=true; await saveTransferMenu(); tu.hidden=false; if(W.scene==='world') return; }
     else if(pick==='自訂鬼怪圖'){ tu.hidden=true; await customArtMenu(); tu.hidden=false; }
@@ -13518,3 +13550,5 @@ window.__game={G,W,MAPS,B,SPECIES,MOVES,Input,makeMon,loadMap,runScript,wildBatt
 window.addEventListener('load',()=>{ boot().catch(e=>console.error(e)); });
 
 </script>
+
+</body></html>
