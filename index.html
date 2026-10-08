@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><title>百鬼祭改錄</title><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body><title>百鬼祭改錄</title>
+<title>百鬼祭改錄</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Serif+TC:wght@700;900&display=swap">
@@ -250,6 +250,13 @@ body.joy-idle #joy-base,body.joy-idle #joy-knob{opacity:.55}
 #pad .ab button[data-act=a]{background:rgba(122,26,20,.75)}
 #pad .ab.vert{flex-direction:column-reverse;transform:none;gap:14px}
 #pad .ab.vert button[data-act=a]{margin-top:0}
+.xfer{left:8%;right:8%;top:8%;bottom:8%;display:flex;flex-direction:column;gap:1cqw;font-size:2.4cqw}
+.xf-help{color:var(--ink-soft);line-height:1.5}
+#xf-code{flex:1;min-height:0;font:1.8cqw/1.3 ui-monospace,Menlo,monospace;background:rgba(255,250,236,.7);border:.2cqw solid var(--ink);border-radius:.4cqw;padding:.8cqw;resize:none;word-break:break-all}
+.xf-acts{display:flex;gap:1cqw;flex-wrap:wrap}
+.xf-acts button,.xf-file{font:inherit;cursor:pointer;border:.25cqw solid var(--ink);background:var(--zhu);color:#fbf1dc;border-radius:.4cqw;padding:.3cqw 1.6cqw}
+#xf-close{background:rgba(255,250,236,.6);color:var(--ink)}
+.xf-msg{color:var(--zhu);min-height:1.4em}
 </style>
 <div id="app">
   <div id="corner"><button type="button" id="fs-btn" aria-label="全螢幕">⛶ 全螢幕</button><button type="button" id="mute2" aria-label="音效開關">音效 開</button></div>
@@ -7398,7 +7405,7 @@ const Input = {
 const KEYMAP = {ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',s:'down',a:'left',d:'right',W:'up',S:'down',A:'left',D:'right',
   z:'a',Z:'a',' ':'a',Enter:'a',j:'a',J:'a',x:'b',X:'b',Escape:'b',Backspace:'b',k:'b',K:'b'};
 window.addEventListener('keydown', e=>{
-  if (e.target && e.target.tagName==='INPUT') return;
+  if (e.target && (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')) return;
   const act=KEYMAP[e.key]; if(!act) return;
   e.preventDefault();
   const wasHeld=Input.held[act];
@@ -9349,6 +9356,137 @@ function drawLife2D(g,camX,camY,ents){
   const f=W.follower; if(f&&!f.hidden){ const x=f.x*16+f.ox-camX, y=f.y*16+f.oy-camY; const bob=Math.abs(Math.sin(W.anim/180))*1.5;
     ents.push({y:f.y*16+f.oy+8,draw:()=>{ g.fillStyle='rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(x+8,y+14,6,2,0,0,7); g.fill(); g.imageSmoothingEnabled=true; g.drawImage(monArt(f.sp,f.dir==='up'?'back':'front'),x-5,y-12-bob,26,26); g.imageSmoothingEnabled=false; }}); }
 }
+
+// ===================== 存檔轉移：電腦↔手機（存檔碼／存檔檔） =====================
+async function packSave(){
+  const json=JSON.stringify({...G,v:1,t:Date.now()});
+  try{ const cs=new CompressionStream('deflate'); const buf=await new Response(new Blob([json]).stream().pipeThrough(cs)).arrayBuffer();
+    let s=''; const u=new Uint8Array(buf); for(let i=0;i<u.length;i+=8192) s+=String.fromCharCode.apply(null,u.subarray(i,i+8192)); return 'BGJ1:'+btoa(s); }
+  catch(e){ return 'BGJ0:'+btoa(unescape(encodeURIComponent(json))); }
+}
+async function unpackSave(code){
+  code=(code||'').trim().replace(/\s+/g,'');
+  if(code.startsWith('BGJ0:')) return JSON.parse(decodeURIComponent(escape(atob(code.slice(5)))));
+  if(!code.startsWith('BGJ1:')) throw new Error('格式不對');
+  const bin=atob(code.slice(5)); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
+  const ds=new DecompressionStream('deflate'); const txt=await new Response(new Blob([u]).stream().pipeThrough(ds)).text(); return JSON.parse(txt);
+}
+function xferPanel(html){ const p=UI.panel('xfer',html); return p; }
+async function saveTransferMenu(){
+  const r=await choose(['匯出存檔（帶到別的裝置）','匯入存檔（從別的裝置帶來）','取消'],{cls:'sub',title:'存檔轉移'});
+  if(r===0){
+    if(G.party.length) saveGame();
+    const code=await packSave();
+    const p=xferPanel(`<div class="menu-title">匯出存檔</div><div class="xf-help">把下面的存檔碼複製起來（例如用 LINE 傳給自己），在另一台裝置選「匯入存檔」貼上即可。也可以下載存檔檔。</div><textarea id="xf-code" readonly>${esc(code)}</textarea><div class="xf-acts"><button type="button" id="xf-copy">複製存檔碼</button><button type="button" id="xf-dl">下載存檔檔</button><button type="button" id="xf-close">完成</button></div><div class="xf-msg" id="xf-msg"></div>`);
+    p.querySelector('#xf-copy').onclick=async()=>{ try{ await navigator.clipboard.writeText(code); p.querySelector('#xf-msg').textContent='已複製！'; }catch(e){ const t=p.querySelector('#xf-code'); t.select(); document.execCommand&&document.execCommand('copy'); p.querySelector('#xf-msg').textContent='已選取，請按複製。'; } };
+    p.querySelector('#xf-dl').onclick=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([code],{type:'text/plain'})); a.download=`百鬼祭改錄_${G.name}_存檔.txt`; a.click(); };
+    await new Promise(res=>{ p.querySelector('#xf-close').onclick=res; (async()=>{ while(document.body.contains(p)){ const k=await Input.wait(); if(k==='b'){ res(); return; } } })(); });
+    p.remove(); Input.waiters.splice(0).forEach(f=>f('_'));
+  } else if(r===1){
+    const p=xferPanel(`<div class="menu-title">匯入存檔</div><div class="xf-help">貼上存檔碼，或選擇下載的存檔檔。<b>目前這台裝置的進度會被覆蓋。</b></div><textarea id="xf-code" placeholder="BGJ1:..."></textarea><div class="xf-acts"><label class="xf-file">選擇存檔檔<input type="file" id="xf-f" accept=".txt,text/plain" hidden></label><button type="button" id="xf-ok">匯入</button><button type="button" id="xf-close">取消</button></div><div class="xf-msg" id="xf-msg"></div>`);
+    const ta=p.querySelector('#xf-code'); p.querySelector('#xf-f').onchange=async e=>{ const f=e.target.files[0]; if(f) ta.value=await f.text(); };
+    const ok=await new Promise(res=>{ p.querySelector('#xf-close').onclick=()=>res(null);
+      p.querySelector('#xf-ok').onclick=async()=>{ try{ const d=await unpackSave(ta.value); if(!d||!Array.isArray(d.party)) throw new Error('bad'); res(d); }catch(e){ p.querySelector('#xf-msg').textContent='存檔碼無法讀取，請確認有完整複製。'; } }; });
+    p.remove(); Input.waiters.splice(0).forEach(f=>f('_'));
+    if(ok){ delete ok.v; delete ok.t; Object.assign(G,ok); saveGame(); await say(`已匯入【${G.name}】的存檔！`); UI.showBox(false); await fade(true,300); loadMap(G.map,G.x,G.y,G.dir); W.scene='world'; await fade(false,300); }
+  }
+}
+
+// ===================== 帳號登入＋雲端存檔（Firebase 免費方案：Google 登入＋Firestore） =====================
+// 只在一般網站（例如 GitHub Pages）啟用；每個帳號只能讀寫自己的存檔（saves/{uid}）。
+const FB_CONFIG={apiKey:"AIzaSyAmjgnf2nprRVpHJ9BBxFbktAp9wmv4rD0",authDomain:"baigui-jigai.firebaseapp.com",projectId:"baigui-jigai",storageBucket:"baigui-jigai.firebasestorage.app",messagingSenderId:"1098860718949",appId:"1:1098860718949:web:b0fdbaef45fd10fff80f8c"};
+const FB_VER='10.12.2';
+const CLOUD={ready:false, loading:null, user:null, auth:null, db:null, err:null, pushT:0, last:null, status:''};
+function cloudSupported(){ return /^https?:$/.test(location.protocol) && !/claude\.ai|claudeusercontent|anthropic/.test(location.hostname) && !/[?&]nocloud/.test(location.search); }
+function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.async=true; s.onload=res; s.onerror=()=>rej(new Error('load '+src)); document.head.appendChild(s); }); }
+function cloudInit(){
+  if(CLOUD.loading) return CLOUD.loading;
+  if(!cloudSupported()) return CLOUD.loading=Promise.resolve(false);
+  const base=`https://www.gstatic.com/firebasejs/${FB_VER}/`;
+  CLOUD.loading=(async()=>{
+    try{
+      await loadScript(base+'firebase-app-compat.js');
+      await Promise.all([loadScript(base+'firebase-auth-compat.js'),loadScript(base+'firebase-firestore-compat.js')]);
+      const app=firebase.apps.length?firebase.app():firebase.initializeApp(FB_CONFIG);
+      CLOUD.auth=firebase.auth(); CLOUD.db=firebase.firestore();
+      try{ await CLOUD.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(e){}
+      CLOUD.auth.onAuthStateChanged(u=>{ CLOUD.user=u||null; try{ localStorage.setItem('bgjg_cloud',u?'1':'0'); }catch(e){} });
+      try{ await CLOUD.auth.getRedirectResult(); }catch(e){ CLOUD.err=e; }
+      await new Promise(r=>{ const off=CLOUD.auth.onAuthStateChanged(()=>{ off(); r(); }); });
+      CLOUD.ready=true; return true;
+    }catch(e){ CLOUD.err=e; console.warn('cloud init failed',e); return false; }
+  })();
+  return CLOUD.loading;
+}
+function cloudName(){ const u=CLOUD.user; return u?(u.displayName||u.email||'玩家'):''; }
+function accountLabel(){ return CLOUD.user?`帳號：${cloudName().slice(0,8)}`:'帳號登入（雲端存檔）'; }
+async function cloudSignIn(){
+  const prov=new firebase.auth.GoogleAuthProvider(); prov.setCustomParameters({prompt:'select_account'});
+  try{ await CLOUD.auth.signInWithPopup(prov); return true; }
+  catch(e){
+    if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment','auth/cancelled-popup-request'].includes(e.code)){ await CLOUD.auth.signInWithRedirect(prov); return false; }
+    if(e.code==='auth/popup-closed-by-user') return false;
+    throw e;
+  }
+}
+function cloudRef(){ return CLOUD.db.collection('saves').doc(CLOUD.user.uid); }
+async function cloudFetch(){ const s=await cloudRef().get(); return s.exists?s.data():null; }
+async function cloudPush(){
+  if(!CLOUD.ready||!CLOUD.user||!G.party||!G.party.length) return false;
+  try{
+    const code=await packSave();
+    await cloudRef().set({code, t:G.savedAt||Date.now(), name:G.name||'', badges:(G.badges||[]).length, dex:Object.keys((G.dex&&G.dex.caught)||{}).length, map:G.map||'', ua:navigator.userAgent.slice(0,120)});
+    CLOUD.status='已同步'; CLOUD.last=Date.now(); return true;
+  }catch(e){ CLOUD.status='同步失敗'; console.warn('cloud push',e); return false; }
+}
+function cloudQueuePush(){ if(!CLOUD.user) return; clearTimeout(CLOUD.pushT); CLOUD.pushT=setTimeout(cloudPush,1200); }
+function fmtTime(t){ if(!t) return '—'; const d=new Date(t); const p=n=>String(n).padStart(2,'0'); return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function localSaveInfo(){ try{ const s=localStorage.getItem(SAVE_KEY); if(!s) return null; const d=JSON.parse(s); return {t:d.savedAt||0,name:d.name,badges:(d.badges||[]).length}; }catch(e){ return null; } }
+async function applyCloudSave(doc){ const d=await unpackSave(doc.code); if(!d||!Array.isArray(d.party)) throw new Error('bad save'); delete d.v; delete d.t; Object.assign(G,d); G.savedAt=doc.t; try{ localStorage.setItem(SAVE_KEY,JSON.stringify({...G,v:1})); }catch(e){} }
+// 登入後比較雲端與本機存檔；回傳 true 代表已讀取雲端存檔
+async function cloudSyncCheck({inGame=false}={}){
+  let doc=null; try{ doc=await cloudFetch(); }catch(e){ await say('讀取雲端存檔失敗，請稍後再試。'); return false; }
+  const loc=localSaveInfo();
+  if(!doc){ if(loc && !inGame && loadGame()){ await cloudPush(); await say('雲端還沒有存檔，已把這台裝置的進度上傳。'); } else if(inGame){ await cloudPush(); await say('已把目前進度上傳到雲端。'); } else await say('雲端還沒有存檔。開始旅程後存檔，就會自動同步。'); return false; }
+  const cloudNewer=!loc || (doc.t||0)>(loc.t||0)+2000;
+  if(cloudNewer){
+    const r=await ask(`雲端有較新的存檔：\n【${doc.name}】徽章${doc.badges}枚・${fmtTime(doc.t)}\n要讀取嗎？${loc?'（這台裝置的進度會被取代）':''}`,['讀取雲端','保留本機']);
+    if(r===0){ await applyCloudSave(doc); return true; }
+    if(loc){ const r2=await ask('要用這台裝置的進度覆蓋雲端嗎？',['覆蓋雲端','先不要']); if(r2===0){ const keep={...G}; if(!inGame) loadGame(); await cloudPush(); if(!inGame) Object.assign(G,keep); await say('已上傳。'); } }
+  } else if(loc && (loc.t||0)>(doc.t||0)+2000){ if(!inGame) loadGame(); await cloudPush(); await say('已把這台裝置較新的進度上傳到雲端。'); }
+  else await say('雲端與這台裝置的存檔一致。');
+  return false;
+}
+// 帳號選單：回傳 true 代表讀取了雲端存檔（呼叫端應進入遊戲）
+async function accountMenu({inGame=false}={}){
+  if(!cloudSupported()){ await say('這個網址不支援帳號登入。\n請到 GitHub 網頁版遊玩，或使用「存檔轉移」。'); UI.showBox(false); return false; }
+  if(!CLOUD.ready){ typeText('連線中……',{wait:false}); await cloudInit(); UI.showBox(false); }
+  if(!CLOUD.ready){ await say('無法連上登入服務，請檢查網路後再試。'); UI.showBox(false); return false; }
+  let loaded=false;
+  if(!CLOUD.user){
+    const r=await choose(['用 Google 帳號登入','取消'],{cls:'sub',title:'帳號登入：電腦、手機共用存檔'});
+    if(r!==0){ UI.showBox(false); return false; }
+    try{ const ok=await cloudSignIn(); if(!ok||!CLOUD.user){ UI.showBox(false); return false; } }
+    catch(e){ await say('登入失敗：'+(e.code||e.message||'未知錯誤')); UI.showBox(false); return false; }
+    await say(`歡迎，${cloudName()}！\n之後每次存檔都會自動同步到雲端。`);
+    loaded=await cloudSyncCheck({inGame});
+  } else {
+    const r=await choose(['立即同步','從雲端讀取','登出','取消'],{cls:'sub',title:`${cloudName()}${CLOUD.last?'・上次同步 '+fmtTime(CLOUD.last):''}`});
+    if(r===0){ if(inGame){ saveGame(); const ok=await cloudPush(); await say(ok?'已存檔並同步到雲端。':'同步失敗，請稍後再試。'); } else loaded=await cloudSyncCheck({inGame}); }
+    else if(r===1){ let doc=null; try{ doc=await cloudFetch(); }catch(e){}
+      if(!doc) await say('雲端沒有存檔。');
+      else { const c=await ask(`讀取雲端存檔？\n【${doc.name}】徽章${doc.badges}枚・${fmtTime(doc.t)}`,['讀取','取消']); if(c===0){ await applyCloudSave(doc); loaded=true; } } }
+    else if(r===2){ await CLOUD.auth.signOut(); await say('已登出。這台裝置的存檔仍會保留。'); }
+  }
+  UI.showBox(false);
+  if(loaded){ await say(`已讀取【${G.name}】的雲端存檔！`); UI.showBox(false); }
+  return loaded;
+}
+// 存檔時自動同步
+const _saveGameLocal=saveGame;
+saveGame=function(){ G.savedAt=Date.now(); const ok=_saveGameLocal(); if(ok) cloudQueuePush(); return ok; };
+// 曾經登入過的裝置，開機就恢復登入
+try{ if(cloudSupported() && localStorage.getItem('bgjg_cloud')==='1') setTimeout(cloudInit,800); }catch(e){}
 
 // ===================================================================
 // opening3d.js — 3D 電影開場（three.js r128 global build，延遲載入）
@@ -12606,6 +12744,8 @@ async function mainMenu(){
     opts.push(['相剋表',typeChart]);
     opts.push(['自訂鬼怪圖',customArtMenu]);
     opts.push([G.name,trainerCard]);
+    opts.push([accountLabel(),async()=>{ const got=await accountMenu({inGame:true}); if(got){ await fade(true,300); loadMap(G.map,G.x,G.y,G.dir); W.scene='world'; await fade(false,300); } }]);
+    opts.push(['存檔轉移',saveTransferMenu]);
     opts.push(['存檔',async()=>{ const ok=await ask('要記錄目前的進度嗎？'); if(ok===0){ if(saveGame()){ Audio.sfx('item'); await say('{name}把今天的經歷寫進了陰陽契約書。\n（進度已存檔）'); } else await say('這個瀏覽器無法存檔……'); } UI.showBox(false); }]);
     opts.push([`音效：${Audio.on?'開':'關'}`,async()=>{ Audio.init(); Audio.toggle(); }]);
     opts.push([musicStyleLabel(),async()=>{ Audio.init(); toggleMusicStyle(); }]);
@@ -13226,14 +13366,17 @@ async function titleScreen(){
   Audio.init(); Audio.cur=null; Audio.play('title');
   press.hidden=true;
   while(true){
-    const opts=[]; if(hasSave()) opts.push('繼續旅程'); opts.push('新的旅程'); opts.push('自訂鬼怪圖'); opts.push(`音效：${Audio.on?'開':'關'}`); opts.push(musicStyleLabel()); opts.push(viewLabel());
+    const opts=[]; if(hasSave()) opts.push('繼續旅程'); opts.push('新的旅程'); opts.push('自訂鬼怪圖'); opts.push(accountLabel()); opts.push('匯入存檔'); opts.push(`音效：${Audio.on?'開':'關'}`); opts.push(musicStyleLabel()); opts.push(viewLabel());
     const r=await choose(opts,{cls:'title-menu',cancel:false});
     const pick=opts[r];
-    if(pick==='繼續旅程'){ if(loadGame()){ tu.hidden=true; await fade(true,300); loadMap(G.map,G.x,G.y,G.dir); W.scene='world'; await fade(false,300); return; } }
+    if(pick==='繼續旅程'){ if(CLOUD.ready&&CLOUD.user){ try{ const doc=await cloudFetch(), loc=localSaveInfo(); if(doc&&(!loc||(doc.t||0)>(loc.t||0)+2000)){ const c=await ask(`雲端有較新的存檔：\n【${doc.name}】徽章${doc.badges}枚・${fmtTime(doc.t)}\n要讀取嗎？`,['讀取雲端','用本機的']); UI.showBox(false); if(c===0){ await applyCloudSave(doc); } } }catch(e){} }
+      if(loadGame()){ tu.hidden=true; await fade(true,300); loadMap(G.map,G.x,G.y,G.dir); W.scene='world'; await fade(false,300); return; } }
     else if(pick==='新的旅程'){
       if(hasSave()){ typeText('開始新的旅程，會覆蓋掉舊的存檔喔。\n確定嗎？',{wait:false}); const c=await choose(['確定','算了'],{cls:'yesno'}); UI.showBox(false); if(c!==0) continue; }
       tu.hidden=true; await newGame(); return;
     }
+    else if(pick.startsWith('帳號')){ tu.hidden=true; const got=await accountMenu(); tu.hidden=false; if(got){ tu.hidden=true; await fade(true,300); loadMap(G.map,G.x,G.y,G.dir); W.scene='world'; await fade(false,300); return; } }
+    else if(pick==='匯入存檔'){ tu.hidden=true; await saveTransferMenu(); tu.hidden=false; if(W.scene==='world') return; }
     else if(pick==='自訂鬼怪圖'){ tu.hidden=true; await customArtMenu(); tu.hidden=false; }
     else if(pick.startsWith('配樂')){ toggleMusicStyle(); }
     else if(pick.startsWith('畫面')){ toggleView3D(); }
@@ -13375,4 +13518,3 @@ window.__game={G,W,MAPS,B,SPECIES,MOVES,Input,makeMon,loadMap,runScript,wildBatt
 window.addEventListener('load',()=>{ boot().catch(e=>console.error(e)); });
 
 </script>
-</body></html>
