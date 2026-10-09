@@ -38,7 +38,7 @@ body{background:var(--desk);color:var(--paper);font-family:var(--f-body);overflo
 #ui{position:absolute;inset:0;font-size:3.1cqw;line-height:1.5}
 #fade,#flash,#wipe{position:absolute;inset:0;pointer-events:none}
 #fade{background:#0a0705;opacity:0}
-#flash{background:#fffaf0;opacity:0}
+#flash{background:radial-gradient(ellipse at 50% 50%,rgba(255,232,200,.22) 0%,rgba(120,28,24,.55) 55%,rgba(24,6,10,.92) 100%);opacity:0}
 #wipe{background:#1a120c;opacity:0}
 #wipe.go{opacity:1;animation:wipeIn .42s ease-in forwards}
 #wipe.out{opacity:1;animation:wipeOut .45s ease-out forwards}
@@ -7570,7 +7570,7 @@ const Audio = {
       case 'shake': this.perc('h',t,.6,d); this.perc('h',t+.08,.4,d); break;
       case 'seal': T(660,0,.08,'sq',.06); T(880,.08,.12,'sq',.06); break;
       case 'break': for(let i=0;i<5;i++)T(300-i*40,i*.03,.05,'sq',.07); this.perc('s',t,.5,d); break;
-      case 'encounter': for(let i=0;i<10;i++)T(220+((i%2)?330:0),i*.05,.05,'sq',.06); break;
+      case 'encounter': T(98,0,.7,'tri',.12); T(147,.04,.6,'tri',.06); for(let i=0;i<5;i++)T(440-i*55,i*.09,.16,'tri',.035); this.perc('s',t+.02,.25,d); break;
       case 'door': T(200,0,.06,'tri',.1); T(150,.06,.08,'tri',.1); break;
       case 'exclaim': T(1200,0,.06,'sq',.06); T(1500,.07,.08,'sq',.06); break;
       case 'item': T(784,0,.1,'sq',.06); T(988,.1,.1,'sq',.06); T(1175,.2,.25,'sq',.06); break;
@@ -7653,7 +7653,7 @@ async function choose(items, opt={}){
 }
 async function ask(text, opts=['是','否'], name){ await typeText(text,{name,wait:false}); const r=await choose(opts,{cls:'yesno'}); return r; }
 async function fade(out, ms=260){ const f=$('#fade'); f.style.transition=`opacity ${ms}ms`; f.style.opacity=out?1:0; await sleep(ms+20); }
-async function flashScreen(times=3){ const f=$('#flash'); for(let i=0;i<times;i++){ f.style.opacity=1; await sleep(70); f.style.opacity=0; await sleep(70);} }
+async function flashScreen(times=3){ const f=$('#flash'); const n=Math.min(times,2); for(let i=0;i<n;i++){ f.style.transition='opacity .28s ease-out'; f.style.opacity=.6; await sleep(260); f.style.transition='opacity .45s ease-in'; f.style.opacity=0; await sleep(i<n-1?380:300); } f.style.transition=''; } // 柔和的暗紅墨暈，不再黑白急閃
 
 // ---------- 遊戲狀態 ----------
 const G = {
@@ -7965,12 +7965,12 @@ const GY = {
   ctx:null, out:null, dry:null, wet:null, rev:null, timer:null, song:null, plucks:{}, noise:null, vol:0.62,
   init(ctx, dest){
     if(this.ctx) return; this.ctx=ctx;
-    this.out=ctx.createGain(); this.out.gain.value=this.vol; this.out.connect(dest);
+    this.out=ctx.createGain(); this.out.gain.value=this.vol; const mlp=ctx.createBiquadFilter(); mlp.type='lowpass'; mlp.frequency.value=4200; mlp.Q.value=0.4; const mls=ctx.createBiquadFilter(); mls.type='lowshelf'; mls.frequency.value=220; mls.gain.value=2.5; this.out.connect(mls); mls.connect(mlp); mlp.connect(dest);
     // 殘響：合成的殿堂脈衝響應
-    const sr=ctx.sampleRate, len=Math.floor(sr*3.2); const ir=ctx.createBuffer(2,len,sr);
-    for(let c=0;c<2;c++){ const d=ir.getChannelData(c); let lp=0; for(let i=0;i<len;i++){ const t=i/len; lp=lp*0.6+(Math.random()*2-1)*0.4; d[i]=lp*Math.pow(1-t,2.6)*(i<sr*0.01?i/(sr*0.01):1); } }
+    const sr=ctx.sampleRate, len=Math.floor(sr*4.6); const ir=ctx.createBuffer(2,len,sr);
+    for(let c=0;c<2;c++){ const d=ir.getChannelData(c); let lp=0; for(let i=0;i<len;i++){ const t=i/len; lp=lp*0.6+(Math.random()*2-1)*0.4; d[i]=lp*Math.pow(1-t,2.2)*(i<sr*0.01?i/(sr*0.01):1); } }
     this.rev=ctx.createConvolver(); this.rev.buffer=ir;
-    this.wet=ctx.createGain(); this.wet.gain.value=0.32; this.rev.connect(this.wet); this.wet.connect(this.out);
+    this.wet=ctx.createGain(); this.wet.gain.value=0.42; this.rev.connect(this.wet); this.wet.connect(this.out);
     const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=180; hp.connect(this.rev); this.revIn=hp;
     const n=sr*2; this.noise=ctx.createBuffer(1,n,sr); const nd=this.noise.getChannelData(0); for(let i=0;i<n;i++) nd[i]=Math.random()*2-1;
   },
@@ -7999,7 +7999,7 @@ const GY = {
     if(o.slide){ s.playbackRate.setValueAtTime(P.rate*Math.pow(2,-o.slide/12),t); s.playbackRate.linearRampToValueAtTime(P.rate,t+0.09); }
     const g=c.createGain(); g.gain.setValueAtTime(vol,t); if(o.dur){ g.gain.setValueAtTime(vol,t+o.dur); g.gain.exponentialRampToValueAtTime(0.0008,t+o.dur+0.18); }
     const body=c.createBiquadFilter(); body.type='peaking'; body.frequency.value=o.body||420; body.Q.value=1.2; body.gain.value=4;
-    const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=o.lp||3600;
+    const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=o.lp||2600;
     const pan=c.createStereoPanner?c.createStereoPanner():null;
     s.connect(body); body.connect(lp); lp.connect(g); if(pan){ pan.pan.value=o.pan||0; g.connect(pan); pan.connect(bus); } else g.connect(bus);
     s.start(t); s.stop(t+(o.dur?o.dur+0.3:P.buf.duration));
@@ -8013,7 +8013,7 @@ const GY = {
     const vib=c.createOscillator(); vib.frequency.value=5.2; const vg=c.createGain(); vg.gain.setValueAtTime(0,t); vg.gain.linearRampToValueAtTime(f*(o.xiao?0.007:0.011),t+Math.min(dur,0.5)); vib.connect(vg); vg.connect(o1.frequency);
     const g2=c.createGain(); g2.gain.value=o.xiao?0.06:0.14; o2.connect(g2);
     const g=c.createGain(); const a=o.xiao?0.12:0.06; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+a); g.gain.setValueAtTime(vol*0.85,t+Math.max(a,dur-0.08)); g.gain.linearRampToValueAtTime(0,t+dur+0.12);
-    const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=o.xiao?1600:3200;
+    const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=o.xiao?1400:2300;
     o1.connect(lp); g2.connect(lp); lp.connect(g);
     // 氣聲
     const ns=c.createBufferSource(); ns.buffer=this.noise; const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f*2; bp.Q.value=6; const ng=c.createGain(); ng.gain.setValueAtTime(vol*0.5,t); ng.gain.exponentialRampToValueAtTime(vol*0.08,t+0.12); ng.gain.linearRampToValueAtTime(0,t+dur+0.1); ns.connect(bp); bp.connect(ng); ng.connect(bus);
@@ -8026,7 +8026,7 @@ const GY = {
     const os=c.createOscillator(); os.type='sawtooth'; const from=o.from?this.mf(o.from):f*Math.pow(2,-1/12);
     os.frequency.setValueAtTime(from,t); os.frequency.exponentialRampToValueAtTime(f,t+0.1);
     const vib=c.createOscillator(); vib.frequency.value=5.6; const vg=c.createGain(); vg.gain.setValueAtTime(0,t); vg.gain.linearRampToValueAtTime(f*0.014,t+Math.min(dur,0.45)); vib.connect(vg); vg.connect(os.frequency);
-    const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=o.lp||1500; lp.Q.value=1.5;
+    const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=o.lp||1150; lp.Q.value=1.0;
     const pk=c.createBiquadFilter(); pk.type='peaking'; pk.frequency.value=950; pk.Q.value=2; pk.gain.value=5;
     const g=c.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+0.09); g.gain.setValueAtTime(vol*0.9,t+Math.max(0.1,dur-0.06)); g.gain.linearRampToValueAtTime(0,t+dur+0.1);
     os.connect(lp); lp.connect(pk); pk.connect(g); g.connect(bus);
@@ -8037,6 +8037,23 @@ const GY = {
     const c=this.ctx; const g=c.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+Math.min(1.2,dur*0.3)); g.gain.setValueAtTime(vol,t+dur*0.7); g.gain.linearRampToValueAtTime(0,t+dur+0.6);
     const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=520; lp.connect(g); g.connect(bus);
     for(const [mm,det] of [[m,0],[m,3],[m+7,0]]){ const o=c.createOscillator(); o.type='triangle'; o.frequency.value=this.mf(mm); o.detune.value=det; const og=c.createGain(); og.gain.value=mm===m?0.5:0.3; o.connect(og); og.connect(lp); o.start(t); o.stop(t+dur+0.8); }
+  },
+  // ---- 弦樂／合唱墊音：和聲的底 ----
+  pad(bus,notes,t,dur,vol){ const c=this.ctx; const g=c.createGain(); const a=Math.min(1.8,dur*0.4), r=Math.min(2.2,dur*0.5);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+a); g.gain.setValueAtTime(vol,t+Math.max(a,dur-r*0.4)); g.gain.linearRampToValueAtTime(0,t+dur+r);
+    const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.Q.value=0.6; lp.frequency.setValueAtTime(450,t); lp.frequency.linearRampToValueAtTime(950,t+dur*0.55); lp.frequency.linearRampToValueAtTime(500,t+dur+r);
+    lp.connect(g); g.connect(bus);
+    notes.forEach((m,i)=>{ for(const [w,det,gn] of [['triangle',-7,0.5],['triangle',7,0.5],['sine',0,0.6]]){ const o=c.createOscillator(); o.type=w; o.frequency.value=this.mf(m); o.detune.value=det+(i%2?3:-3); const og=c.createGain(); og.gain.value=gn/notes.length*1.6; o.connect(og); og.connect(lp); o.start(t); o.stop(t+dur+r+0.1); } });
+  },
+  // ---- 幽幽人聲（「啊～」般的鬼魅合唱） ----
+  ghost(bus,m,t,dur,vol){ const c=this.ctx, f=this.mf(m);
+    const g=c.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+dur*0.4); g.gain.linearRampToValueAtTime(0,t+dur);
+    const vib=c.createOscillator(); vib.frequency.value=4.3; const vg=c.createGain(); vg.gain.value=f*0.012; vib.connect(vg);
+    const f1=c.createBiquadFilter(); f1.type='bandpass'; f1.Q.value=4; f1.frequency.setValueAtTime(380,t); f1.frequency.linearRampToValueAtTime(700,t+dur*0.5); f1.frequency.linearRampToValueAtTime(420,t+dur);
+    const f2=c.createBiquadFilter(); f2.type='bandpass'; f2.Q.value=5; f2.frequency.setValueAtTime(800,t); f2.frequency.linearRampToValueAtTime(1150,t+dur*0.5); f2.frequency.linearRampToValueAtTime(850,t+dur);
+    const mix=c.createGain(); mix.gain.value=1; f1.connect(mix); f2.connect(mix); mix.connect(g); g.connect(bus);
+    for(const det of [-14,0,13]){ const o=c.createOscillator(); o.type='sawtooth'; o.frequency.value=f; o.detune.value=det; vg.connect(o.frequency); o.connect(f1); o.connect(f2); o.start(t); o.stop(t+dur+0.1); }
+    vib.start(t); vib.stop(t+dur+0.1);
   },
   // ---- 打擊 ----
   muyu(bus,t,vol,hi=0){ const c=this.ctx; const o=c.createOscillator(); o.type='sine'; const f=hi?1150:820; o.frequency.setValueAtTime(f*1.25,t); o.frequency.exponentialRampToValueAtTime(f,t+0.015); const g=c.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.09); o.connect(g); g.connect(bus); o.start(t); o.stop(t+0.12); },
@@ -8053,22 +8070,22 @@ function gyRng(seed){ let s=seed>>>0||1; return ()=>{ s^=s<<13; s>>>=0; s^=s>>17
 const PENTA=[0,2,4,7,9];
 // 曲風設定：gong=宮音 MIDI、mode=以第幾個音為主音(0宮1商2角3徵4羽)、bpm、lead 主奏輪替、acc 伴奏型、perc 打擊型、amb 環境音
 const GY_SONGS={
-  title:{gong:60,mode:4,bpm:62,lead:['xiao','zheng','xiao','erhu'],acc:'arp',perc:'bell',amb:'wind',dens:0.45,seed:11},
+  title:{gong:60,mode:4,bpm:62,lead:['xiao','zheng','xiao','erhu'],acc:'arp',perc:'bell',amb:'wind',dens:0.45,seed:11,ghost:1},
   village:{gong:62,mode:0,bpm:76,lead:['zheng','dizi','zheng','dizi'],acc:'arp',perc:'none',amb:'cricket',dens:0.55,seed:23},
   town:{gong:65,mode:3,bpm:88,lead:['pipa','dizi','zheng','dizi'],acc:'walk',perc:'muyu2',amb:'none',dens:0.65,seed:37},
   route:{gong:62,mode:1,bpm:78,lead:['dizi','zheng','dizi','xiao'],acc:'sparse',perc:'none',amb:'cricket',dens:0.55,seed:41},
-  grave:{gong:58,mode:4,bpm:54,lead:['zheng','xiao','erhu','zheng'],acc:'sparse',perc:'bellslow',amb:'wind',dens:0.32,seed:53,low:1},
-  coast:{gong:63,mode:0,bpm:70,lead:['dizi','zheng','xiao','zheng'],acc:'arp',perc:'none',amb:'waves',dens:0.5,seed:61},
-  mountain:{gong:60,mode:1,bpm:66,lead:['xiao','zheng','xiao','erhu'],acc:'sparse',perc:'muyu',amb:'wind',dens:0.42,seed:71},
-  gate:{gong:56,mode:4,bpm:58,lead:['erhu','zheng','erhu','xiao'],acc:'drone',perc:'doom',amb:'wind',dens:0.4,seed:83,low:1},
-  temple:{gong:62,mode:0,bpm:60,lead:['zheng','xiao','zheng','zheng'],acc:'sparse',perc:'muyu',amb:'none',dens:0.38,seed:97},
-  shanhai:{gong:65,mode:3,bpm:80,lead:['dizi','zheng','erhu','dizi'],acc:'arp',perc:'bell',amb:'wind',dens:0.55,seed:101},
+  grave:{gong:58,mode:4,bpm:54,lead:['zheng','xiao','erhu','zheng'],acc:'sparse',perc:'bellslow',amb:'wind',dens:0.32,seed:53,ghost:1,heart:1,low:1},
+  coast:{gong:63,mode:0,bpm:70,lead:['dizi','zheng','xiao','zheng'],acc:'arp',perc:'none',amb:'waves',dens:0.5,seed:61,ghost:1},
+  mountain:{gong:60,mode:1,bpm:66,lead:['xiao','zheng','xiao','erhu'],acc:'sparse',perc:'muyu',amb:'wind',dens:0.42,seed:71,ghost:1},
+  gate:{gong:56,mode:4,bpm:58,lead:['erhu','zheng','erhu','xiao'],acc:'drone',perc:'doom',amb:'wind',dens:0.4,seed:83,ghost:1,low:1},
+  temple:{gong:62,mode:0,bpm:60,lead:['zheng','xiao','zheng','zheng'],acc:'sparse',perc:'muyu',amb:'none',dens:0.38,seed:97,ghost:1},
+  shanhai:{gong:65,mode:3,bpm:80,lead:['dizi','zheng','erhu','dizi'],acc:'arp',perc:'bell',amb:'wind',dens:0.55,seed:101,ghost:1},
   ending:{gong:62,mode:0,bpm:70,lead:['zheng','dizi','erhu','zheng'],acc:'arp',perc:'bell',amb:'none',dens:0.5,seed:113},
   battle:{gong:57,mode:4,bpm:132,lead:['erhu','pipa','erhu','dizi'],acc:'drive',perc:'battle',amb:'none',dens:0.72,seed:127,fast:1},
   trainer:{gong:59,mode:1,bpm:138,lead:['pipa','erhu','dizi','erhu'],acc:'drive',perc:'battle',amb:'none',dens:0.75,seed:131,fast:1},
   gym:{gong:60,mode:3,bpm:142,lead:['erhu','dizi','pipa','erhu'],acc:'drive',perc:'battle2',amb:'none',dens:0.78,seed:137,fast:1},
   rival:{gong:62,mode:0,bpm:148,lead:['dizi','pipa','erhu','dizi'],acc:'drive',perc:'battle',amb:'none',dens:0.78,seed:149,fast:1},
-  boss:{gong:55,mode:4,bpm:118,lead:['erhu','erhu','pipa','xiao'],acc:'drive',perc:'boss',amb:'none',dens:0.7,seed:151,fast:1,low:1},
+  boss:{gong:55,mode:4,bpm:118,lead:['erhu','erhu','pipa','xiao'],acc:'drive',perc:'boss',amb:'none',dens:0.7,seed:151,ghost:1,heart:0,fast:1,low:1},
 };
 function gyCompose(def){
   const R=gyRng(def.seed*7919+13);
@@ -8094,7 +8111,7 @@ function gyCompose(def){
           const targets=[tIdx,tIdx+3,tIdx-2]; idx=targets[Math.floor(R()*targets.length)]; }
         idx=Math.max(tIdx-5,Math.min(tIdx+6,idx));
         const rest= !last && R()<(def.fast?0.06:0.14) && d<=2;
-        out.push({b:bar*BAR+pos/2,d:d/2,m:scale[idx],rest,orn:R()<0.18,last});
+        out.push({b:bar*BAR+pos/2,d:d/2,m:scale[idx],ix:idx,rest,orn:R()<0.18,last});
         pos+=d; });
     }
     phraseCache[key]=out; return out;
@@ -8111,7 +8128,9 @@ function gyCompose(def){
     const P=(kind==='B'||kind==='C')?prog2:prog;
     // 旋律
     for(const n of ph){ if(n.rest) continue; const m=n.m+(lead==='xiao'?-12:0)+(def.low&&lead==='erhu'?-12:0);
-      ev.push({b:base+n.b, k:'lead', ins:lead, m, d:n.d, orn:n.orn, last:n.last}); }
+      ev.push({b:base+n.b, k:'lead', ins:lead, m, d:n.d, orn:n.orn, last:n.last});
+      // 二部和聲：長音下方加一個柔和的三度／四度，不再只有單一旋律
+      if(!def.fast && n.d>=1 && n.ix!=null && R()<0.6){ const hm=scale[Math.max(0,n.ix-(R()<0.5?2:3))]+(lead==='xiao'?-12:0); ev.push({b:base+n.b+0.02, k:'harm', m:hm, d:n.d, v:0.55}); } }
     // 伴奏與低音
     for(let bar=0;bar<4;bar++){
       const rootIdx=scale.indexOf(tonic)+[0,1,2,3,4][P[bar]]; const root=scale[Math.max(0,rootIdx)]; const b0=base+bar*BAR;
@@ -8121,7 +8140,9 @@ function gyCompose(def){
       else if(def.acc==='walk'){ [0,1,2,1].forEach((k,i)=>ev.push({b:b0+i,k:'pl',m:ch[k]-12,v:0.17,pan:-0.2,dur:0.5})); }
       else if(def.acc==='drone'){ if(bar%2===0) ev.push({b:b0,k:'pl',m:ch[0]-12,v:0.22,bend:R()<0.5?2:0}); }
       else if(def.acc==='drive'){ const pat=[0,0,1,0,2,0,1,0]; pat.forEach((k,i)=>ev.push({b:b0+i*0.5,k:'pl',m:ch[k]-12,v:i%2?0.1:0.17,dur:0.22,bright:0.8,pan:-0.15})); }
-      if(bar%2===0) ev.push({b:b0,k:'drone',m:root-24,d:BAR*2,v:def.fast?0.035:0.045});
+      if(bar%2===0) ev.push({b:b0,k:'drone',m:root-24,d:BAR*2,v:def.fast?0.03:0.04});
+      if(bar%2===0){ const ri=Math.max(5,rootIdx); const pn=[scale[ri-5],scale[ri-2],scale[ri+1],scale[ri+(bar%4===0?3:2)]]; ev.push({b:b0,k:'pad',notes:pn,d:BAR*2,v:def.fast?0.045:0.07}); }
+      if(def.heart && bar%2===0){ ev.push({b:b0,k:'drum',v:0.09},{b:b0+0.4,k:'drum',v:0.06}); }
       // 打擊
       const pc=def.perc;
       if(pc==='muyu') ev.push({b:b0,k:'muyu',v:0.16},{b:b0+2,k:'muyu',v:0.12});
@@ -8140,6 +8161,7 @@ function gyCompose(def){
     }
     // 句尾古箏刮奏
     if(def.acc!=='drive' && (si===3||si===7)){ const st=scale.indexOf(tonic); for(let i=0;i<9;i++) ev.push({b:base+15+i*0.06,k:'pl',m:scale[st+i],v:0.08,pan:0.3}); }
+    if(def.ghost && si%2===0){ ev.push({b:base+3+Math.floor(R()*4),k:'ghost',m:scale[tIdx-3-(si%4===0?0:2)]-12*(def.low?1:0),d:12,v:0.05}); if(R()<0.5) ev.push({b:base+9+Math.floor(R()*3),k:'bell',v:0.05,m:scale[tIdx+4]}); }
     if(def.amb==='wind' && si%2===0) ev.push({b:base,k:'swell',d:14,v:0.022,f:500});
     if(def.amb==='waves') for(let i=0;i<2;i++) ev.push({b:base+i*8,k:'swell',d:8,v:0.03,f:380});
     if(def.amb==='cricket' && si%2===1) for(let i=0;i<6;i++) ev.push({b:base+i*2.5+R(),k:'cricket',v:0.012});
@@ -8169,14 +8191,17 @@ function gyDuck(on){ if(GY.out&&Audio.ctx){ const t=Audio.ctx.currentTime; GY.ou
 function gyEvent(def,bus,e,t,spb){ const c=GY.ctx; try{
     switch(e.k){
       case 'lead': {
-        const d=e.d*spb, v=def.fast?0.17:0.15;
-        if(e.ins==='zheng') GY.pluck(bus,e.m,t,0.32,{bend:e.orn&&!e.last?2:0,pan:0.15,bright:0.5});
+        const d=e.d*spb, v=def.fast?0.16:0.12;
+        if(e.ins==='zheng') GY.pluck(bus,e.m,t,0.27,{bend:e.orn&&!e.last?2:0,pan:0.15,bright:def.fast?0.5:0.38});
         else if(e.ins==='pipa'){ if(e.d>=1){ const n=Math.floor(d/0.07); for(let k=0;k<n;k++) GY.pluck(bus,e.m,t+k*0.07,0.16*(k?0.7:1),{dur:0.08,bright:0.75,pan:0.2,body:900}); } else GY.pluck(bus,e.m,t,0.26,{dur:Math.max(0.12,d),bright:0.75,pan:0.2,body:900}); }
         else if(e.ins==='dizi') GY.flute(bus,e.m,t,Math.max(0.12,d*0.95),v*0.9,{});
         else if(e.ins==='xiao') GY.flute(bus,e.m,t,Math.max(0.2,d*0.97),v*1.1,{xiao:1});
         else if(e.ins==='erhu') GY.erhu(bus,e.m,t,Math.max(0.15,d*0.96),v*0.75,{lp:def.low?1100:1500});
         break; }
       case 'pl': GY.pluck(bus,e.m,t,e.v,{pan:e.pan||0,dur:e.dur?e.dur*spb:0,bright:e.bright??0.45,bend:e.bend||0}); break;
+      case 'harm': GY.flute(bus,e.m,t+0.03,Math.max(0.3,e.d*spb*0.95),0.1*e.v,{xiao:1}); break;
+      case 'pad': GY.pad(bus,e.notes,t,e.d*spb,e.v); break;
+      case 'ghost': GY.ghost(bus,e.m,t,e.d*spb,e.v); break;
       case 'drone': GY.drone(bus,e.m,t,e.d*spb,e.v); break;
       case 'muyu': GY.muyu(bus,t,e.v,e.hi); break;
       case 'bell': GY.bell(bus,t,e.v,e.m); break;
@@ -8244,7 +8269,7 @@ async function trainerBattle(n){
   const T=n.trainer; const team=(typeof T.team==='function'?T.team():T.team).map(([sp,lv,mv])=>makeMon(sp,lv,mv?{moves:mv}:{}));
   return runBattle({trainer:{name:n.name, title:T.title||'', spr:n.spr, team, money:T.money||(team[team.length-1].lv*40)}, theme:T.theme, music:T.music, canLose:T.canLose});
 }
-async function encounterTransition(){ Audio.sfx('encounter'); await flashScreen(3); $('#wipe').className='wipe go'; await sleep(450); }
+async function encounterTransition(){ Audio.sfx('encounter'); await flashScreen(1); $('#wipe').className='wipe go'; await sleep(450); }
 async function runBattle(opt){
   W.busy++;
   try{ return await runBattleInner(opt); }
@@ -9268,35 +9293,68 @@ async function weatherRitual(name='天師'){
 function cryParams(sp){
   const S=SPECIES[sp]; const R=gyRng(sp*7331+17); const bst=S.b.reduce((a,b)=>a+b,0);
   const t=S.t[0], t2=S.t[1]||t;
-  const base=Math.max(110,Math.min(1300, 900*Math.pow(280/bst,1.6)*(0.8+R()*0.45)));
+  const base=Math.max(90,Math.min(1300, 900*Math.pow(280/bst,1.6)*(0.8+R()*0.45)));
+  // 依屬性決定「叫聲類型」候選，再依編號挑一種；體型大的加吼叫、小的加咯咯笑／啁啾
+  const POOL={'鬼':['moan','wail','sob','whisper'],'神':['chime','choir','chime'],'精':['chirp','giggle','chime'],'木':['croak','rustle','giggle'],'水':['bubble','croak','whale'],
+    '火':['crackle','roar','howl'],'雷':['zap','crackle','roar'],'風':['whistle','chirp','howl'],'屍':['rattle','moan','growl','hiss'],'妖':['yip','howl','meow','giggle'],
+    '獸':['growl','howl','roar','yip'],'咒':['hiss','whisper','rattle','wail'],'金':['chime','zap','rattle'],'土':['growl','rumble','roar'],'無':['rattle','whisper','hiss']};
+  const pool=(POOL[t]||['yip']).slice(); if(bst>470) pool.push('roar','rumble'); if(bst<300) pool.push('giggle','chirp');
+  const kind=pool[Math.floor(R()*pool.length)];
+  const tex=['crackle','hiss','chime','bubble','whisper','rattle'][Math.floor(R()*6)]; // 副屬性質感
   const shapes=['rise','fall','arch','dip','warble','stutter'];
-  return {base, t, t2, shape:shapes[Math.floor(R()*shapes.length)], syl:1+Math.floor(R()*(bst>450?2:3)), len:0.18+R()*0.22+(bst>450?0.12:0), vib:3+R()*9, bright:R(), detune:R()*30};
+  return {base, t, t2, kind, tex, shape:shapes[Math.floor(R()*shapes.length)], syl:1+Math.floor(R()*(bst>450?2:3)), len:0.2+R()*0.25+(bst>450?0.15:0), vib:3+R()*9, bright:R(), detune:R()*30, vow:Math.floor(R()*5), bst};
 }
+const VOWELS=[[800,1250],[500,900],[350,700],[320,2300],[520,1900]]; // 啊 喔 嗚 咿 欸
 function playCry(sp,opt={}){
   const c=Audio.ctx; if(!c||!Audio.on||!SPECIES[sp]) return; const P=cryParams(sp); const out=Audio.sfxGain; const t0=c.currentTime+0.02;
-  const faint=!!opt.faint, slow=faint?1.7:1, pitchK=faint?0.62:1, vol=(opt.vol||1)*0.16;
-  const wave={'鬼':'sine','神':'sine','精':'triangle','木':'triangle','水':'sine','火':'sawtooth','雷':'square','風':'triangle','屍':'sawtooth','妖':'triangle','獸':'sawtooth','咒':'sawtooth','金':'square','土':'sawtooth','無':'square'}[P.t]||'triangle';
-  for(let s=0;s<P.syl;s++){
-    const t=t0+s*(P.len*0.85)*slow, d=P.len*slow*(s===P.syl-1?1.25:0.8);
-    const f=P.base*pitchK*(s%2?1.12:1);
-    const o=c.createOscillator(); o.type=wave; const o2=c.createOscillator(); o2.type=(P.t2==='鬼'||P.t2==='神')?'sine':'triangle'; o2.detune.value=P.detune+700;
-    const fq=(k)=>f*k;
-    const set=(osc,mul)=>{ const F=osc.frequency; F.setValueAtTime(fq(mul)*(P.shape==='rise'?0.75:P.shape==='fall'?1.3:P.shape==='dip'?1.1:0.9),t);
-      if(P.shape==='rise') F.exponentialRampToValueAtTime(fq(mul)*1.25,t+d);
-      else if(P.shape==='fall') F.exponentialRampToValueAtTime(fq(mul)*0.7,t+d);
-      else if(P.shape==='arch'){ F.exponentialRampToValueAtTime(fq(mul)*1.3,t+d*0.45); F.exponentialRampToValueAtTime(fq(mul)*0.8,t+d); }
-      else if(P.shape==='dip'){ F.exponentialRampToValueAtTime(fq(mul)*0.75,t+d*0.5); F.exponentialRampToValueAtTime(fq(mul)*1.05,t+d); }
-      else F.exponentialRampToValueAtTime(fq(mul)*(faint?0.6:1.0),t+d); };
-    set(o,1); set(o2,1);
-    const lfo=c.createOscillator(); lfo.frequency.value=P.shape==='warble'?P.vib+6:P.vib; const lg=c.createGain(); lg.gain.value=f*(P.t==='鬼'||P.shape==='warble'?0.08:0.025); lfo.connect(lg); lg.connect(o.frequency); lg.connect(o2.frequency);
-    const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1200+P.bright*3000; lp.Q.value=wave==='sawtooth'?3:1;
-    const g=c.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+0.02); if(P.shape==='stutter'){ for(let k=1;k<5;k++){ g.gain.setValueAtTime(vol*0.25,t+d*k/5); g.gain.linearRampToValueAtTime(vol,t+d*k/5+0.02); } } g.gain.setValueAtTime(vol*0.8,t+d*0.7); g.gain.exponentialRampToValueAtTime(0.001,t+d);
-    const g2=c.createGain(); g2.gain.value=0.35; o2.connect(g2); g2.connect(lp);
-    o.connect(lp); lp.connect(g); g.connect(out);
-    // 屬性點綴
-    if(P.t==='火'||P.t==='屍'||P.t==='獸'||P.t==='土'){ const n=c.createBufferSource(); n.buffer=Audio.noise; const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f*2; bp.Q.value=2; const ng=c.createGain(); ng.gain.setValueAtTime(vol*0.5,t); ng.gain.exponentialRampToValueAtTime(0.001,t+d); n.connect(bp); bp.connect(ng); ng.connect(out); n.start(t,Math.random()*0.3); n.stop(t+d); }
-    if(P.t==='金'||P.t==='神') { const b=c.createOscillator(); b.frequency.value=f*2.76; const bg=c.createGain(); bg.gain.setValueAtTime(vol*0.4,t); bg.gain.exponentialRampToValueAtTime(0.001,t+d*1.6); b.connect(bg); bg.connect(out); b.start(t); b.stop(t+d*1.7); }
-    for(const x of [o,o2,lfo]){ x.start(t); x.stop(t+d+0.05); }
+  const faint=!!opt.faint, slow=faint?1.7:1, pk=faint?0.62:1, vol=(opt.vol||1)*0.17, f0=P.base*pk;
+  const end=(t,d)=>t+d+0.08;
+  // 回音（鬼類）
+  let wet=out; if(['moan','wail','sob','whisper','choir','whale'].includes(P.kind)){ const dl=c.createDelay(1); dl.delayTime.value=0.19; const fb=c.createGain(); fb.gain.value=0.38; const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1800; dl.connect(lp); lp.connect(fb); fb.connect(dl); const wg=c.createGain(); wg.gain.value=0.55; lp.connect(wg); wg.connect(out); const mix=c.createGain(); mix.connect(out); mix.connect(dl); wet=mix; setTimeout(()=>{try{dl.disconnect();mix.disconnect();}catch(e){}},3500); }
+  // 通用人聲合成：振盪器 → 兩個共振峰（母音可滑動）→ 包絡
+  const voice=(t,d,{wave='sawtooth',f=[f0,f0],v=[P.vow,P.vow],vib=P.vib,vd=0.02,am=0,breath=0.0,gain=1,sub=0})=>{
+    const o=c.createOscillator(); o.type=wave; o.frequency.setValueAtTime(f[0],t); o.frequency.exponentialRampToValueAtTime(Math.max(30,f[1]),t+d);
+    if(vib){ const l=c.createOscillator(); l.frequency.value=vib; const lg=c.createGain(); lg.gain.value=f0*vd; l.connect(lg); lg.connect(o.frequency); l.start(t); l.stop(end(t,d)); }
+    const g=c.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol*gain,t+Math.min(0.04,d*0.2)); g.gain.setValueAtTime(vol*gain*0.8,t+d*0.65); g.gain.exponentialRampToValueAtTime(0.001,t+d);
+    if(am){ const l2=c.createOscillator(); l2.frequency.value=am; const ag=c.createGain(); ag.gain.value=vol*gain*0.5; l2.connect(ag); ag.connect(g.gain); l2.start(t); l2.stop(end(t,d)); }
+    const mix=c.createGain(); mix.gain.value=1;
+    for(let k=0;k<2;k++){ const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=k?5:3; bp.frequency.setValueAtTime(VOWELS[v[0]][k],t); bp.frequency.linearRampToValueAtTime(VOWELS[v[1]][k],t+d); const bg=c.createGain(); bg.gain.value=k?0.6:1; o.connect(bp); bp.connect(bg); bg.connect(mix); }
+    mix.connect(g); g.connect(wet);
+    if(sub){ const so=c.createOscillator(); so.type='sine'; so.frequency.setValueAtTime(f[0]*0.5,t); so.frequency.exponentialRampToValueAtTime(Math.max(25,f[1]*0.5),t+d); const sg=c.createGain(); sg.gain.setValueAtTime(vol*sub,t); sg.gain.exponentialRampToValueAtTime(0.001,t+d); so.connect(sg); sg.connect(out); so.start(t); so.stop(end(t,d)); }
+    if(breath){ const n=c.createBufferSource(); n.buffer=Audio.noise; const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=VOWELS[v[0]][1]; bp.Q.value=1.2; const ng=c.createGain(); ng.gain.setValueAtTime(vol*breath,t); ng.gain.exponentialRampToValueAtTime(0.001,t+d); n.connect(bp); bp.connect(ng); ng.connect(wet); n.start(t,Math.random()*0.4); n.stop(end(t,d)); }
+    o.start(t); o.stop(end(t,d));
+  };
+  const noise=(t,d,freq,q,gain,type='bandpass',sweep=1)=>{ const n=c.createBufferSource(); n.buffer=Audio.noise; const b=c.createBiquadFilter(); b.type=type; b.frequency.setValueAtTime(freq,t); b.frequency.exponentialRampToValueAtTime(Math.max(60,freq*sweep),t+d); b.Q.value=q; const g=c.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol*gain,t+Math.min(0.05,d*0.3)); g.gain.exponentialRampToValueAtTime(0.001,t+d); n.connect(b); b.connect(g); g.connect(wet); n.start(t,Math.random()*0.5); n.stop(end(t,d)); };
+  const tone=(t,d,f,w='sine',gain=1,f2=null)=>{ const o=c.createOscillator(); o.type=w; o.frequency.setValueAtTime(f,t); if(f2) o.frequency.exponentialRampToValueAtTime(Math.max(30,f2),t+d); const g=c.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol*gain,t+0.012); g.gain.exponentialRampToValueAtTime(0.001,t+d); o.connect(g); g.connect(wet); o.start(t); o.stop(end(t,d)); };
+  const L=P.len*slow, K=P.kind;
+  if(K==='moan'){ voice(t0,L*2.2,{wave:'sawtooth',f:[f0*1.15,f0*0.7],v:[2,1],vib:4.5,vd:0.035,am:5,breath:0.5,gain:0.9}); }
+  else if(K==='wail'){ voice(t0,L*2.4,{wave:'sawtooth',f:[f0*0.8,f0*1.5],v:[2,0],vib:6,vd:0.05,breath:0.35}); voice(t0+L*1.6,L*1.4,{wave:'sawtooth',f:[f0*1.5,f0*0.6],v:[0,2],vib:7,vd:0.06,gain:0.7}); }
+  else if(K==='sob'){ for(let i=0;i<3;i++) voice(t0+i*L*0.55,L*0.6,{wave:'triangle',f:[f0*(1.2-i*0.12),f0*(0.85-i*0.1)],v:[1,2],vib:8,vd:0.03,breath:0.4,gain:1-i*0.18}); }
+  else if(K==='whisper'){ noise(t0,L*2.2,2400+P.bright*1500,3,0.9,'bandpass',0.55); noise(t0+L*0.3,L*1.6,1200,2,0.5,'bandpass',1.6); voice(t0+L*0.2,L*1.6,{wave:'sine',f:[f0*0.9,f0*0.8],v:[2,2],vib:3,vd:0.03,gain:0.45}); }
+  else if(K==='howl'){ voice(t0,L*2.6,{wave:'sawtooth',f:[f0*0.7,f0*1.4],v:[2,0],vib:5.5,vd:0.025,breath:0.15}); voice(t0+L*1.5,L*1.4,{wave:'sawtooth',f:[f0*1.4,f0*0.85],v:[0,2],vib:5.5,vd:0.04}); }
+  else if(K==='growl'){ voice(t0,L*1.8,{wave:'sawtooth',f:[f0*0.55,f0*0.42],v:[1,2],vib:0,am:28+P.bright*14,gain:1,sub:0.7}); noise(t0,L*1.6,500,1,0.4,'lowpass',0.6); }
+  else if(K==='roar'){ voice(t0,L*2.2,{wave:'sawtooth',f:[f0*0.5,f0*0.36],v:[0,1],vib:0,am:18,gain:1.1,sub:0.9}); noise(t0,L*2,900,0.8,0.55,'bandpass',0.4); }
+  else if(K==='rumble'){ voice(t0,L*2.6,{wave:'triangle',f:[f0*0.38,f0*0.3],v:[1,2],vib:0,am:9,gain:1,sub:1.1}); noise(t0,L*2.4,260,1,0.6,'lowpass',0.7); }
+  else if(K==='yip'){ for(let i=0;i<P.syl+1;i++) voice(t0+i*L*0.42,L*0.4,{wave:'sawtooth',f:[f0*(1.2+0.1*i),f0*(0.9)],v:[3,0],vib:7,vd:0.02,gain:1-i*0.1}); }
+  else if(K==='meow'){ voice(t0,L*1.8,{wave:'sawtooth',f:[f0*0.9,f0*1.25],v:[3,0],vib:6,vd:0.03,breath:0.1}); voice(t0+L*1.2,L*1.2,{wave:'sawtooth',f:[f0*1.25,f0*0.7],v:[0,2],vib:6,vd:0.03,gain:0.8}); }
+  else if(K==='giggle'){ const n=5+P.vow; for(let i=0;i<n;i++) voice(t0+i*0.075*slow,0.07*slow+0.02,{wave:'square',f:[f0*(i%2?1.5:1.25),f0*(i%2?1.45:1.2)],v:[3,3],vib:0,gain:0.8-i*0.04}); }
+  else if(K==='chirp'){ const n=2+P.syl; for(let i=0;i<n;i++) tone(t0+i*0.11*slow,0.1*slow,f0*(1.6+0.12*(i%3))*(P.shape==='fall'?1:1.1),'sine',0.9,f0*(P.shape==='fall'?1.1:2.1)); }
+  else if(K==='whistle'){ tone(t0,L*2.4,f0*1.3,'sine',0.7,f0*(P.shape==='fall'?0.8:2)); noise(t0,L*2.4,f0*2,6,0.4,'bandpass',P.shape==='fall'?0.5:1.8); }
+  else if(K==='croak'){ const n=2+P.syl; for(let i=0;i<n;i++){ const t=t0+i*0.15*slow; const o=c.createOscillator(); o.type='square'; o.frequency.setValueAtTime(f0*0.6,t); o.frequency.exponentialRampToValueAtTime(f0*0.4,t+0.12); const m=c.createOscillator(); m.frequency.value=f0*0.9; const mg=c.createGain(); mg.gain.value=f0*0.7; m.connect(mg); mg.connect(o.frequency); const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(400,t); lp.frequency.linearRampToValueAtTime(1500,t+0.06); lp.frequency.linearRampToValueAtTime(500,t+0.14); const g=c.createGain(); g.gain.setValueAtTime(vol*0.9,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.14); o.connect(lp); lp.connect(g); g.connect(wet); o.start(t); m.start(t); o.stop(t+0.18); m.stop(t+0.18); } }
+  else if(K==='bubble'){ const n=4+P.syl*2; for(let i=0;i<n;i++) tone(t0+i*0.07*slow+Math.random()*0.02,0.09*slow,f0*(0.8+Math.random()*0.7),'sine',0.8,f0*(1.8+Math.random()*0.8)); }
+  else if(K==='whale'){ voice(t0,L*3,{wave:'sine',f:[f0*0.5,f0*0.9],v:[2,1],vib:2.5,vd:0.05,gain:1,sub:0.6}); voice(t0+L*1.2,L*2.2,{wave:'sine',f:[f0*0.95,f0*0.45],v:[1,2],vib:2.5,vd:0.05,gain:0.8}); }
+  else if(K==='hiss'){ noise(t0,L*2.2,5200,1.6,1,'highpass',0.7); noise(t0+0.05,L*1.8,3000,3,0.5,'bandpass',0.6); voice(t0+L*0.4,L*1.3,{wave:'sawtooth',f:[f0*0.6,f0*0.55],v:[3,4],vib:30,vd:0.01,gain:0.35}); }
+  else if(K==='rattle'){ const n=7+P.vow*2; for(let i=0;i<n;i++) noise(t0+i*0.04*slow+(i%3)*0.006,0.035,1800+Math.random()*2200,5,1.1,'bandpass',0.8); voice(t0,L*1.8,{wave:'sawtooth',f:[f0*0.5,f0*0.4],v:[1,2],vib:0,am:14,gain:0.7,sub:0.4}); }
+  else if(K==='crackle'){ const n=8+P.vow*2; for(let i=0;i<n;i++) noise(t0+Math.random()*L*2,0.03+Math.random()*0.05,700+Math.random()*3500,2,1,'bandpass',0.7); noise(t0,L*2.2,300,0.7,0.6,'lowpass',0.6); voice(t0,L*1.8,{wave:'sawtooth',f:[f0*0.6,f0*0.45],v:[0,1],vib:0,am:22,gain:0.6}); }
+  else if(K==='zap'){ for(let i=0;i<3;i++){ const t=t0+i*0.11*slow; tone(t,0.1*slow,f0*(3.2-i*0.5),'square',0.55,f0*0.6); noise(t,0.07,4000,1,0.8,'highpass',0.5); } }
+  else if(K==='chime'){ const f=Math.max(300,f0*1.4); for(let i=0;i<2+P.syl;i++){ const t=t0+i*0.14*slow; for(const [m,a,d] of [[1,1,1.1],[2.76,0.35,0.6],[4.1,0.15,0.35]]) tone(t,d*slow,f*m*(1+0.12*(i%2)),'sine',0.55*a); } }
+  else if(K==='choir'){ for(const k of [1,1.5,2]) voice(t0,L*3,{wave:'sawtooth',f:[f0*k*0.9,f0*k*0.92],v:[0,0],vib:4.5,vd:0.012,breath:0.12,gain:0.4}); }
+  else if(K==='rustle'){ for(let i=0;i<5;i++) noise(t0+i*0.08*slow,0.12,3200+Math.random()*1500,1.2,0.7,'bandpass',0.6); voice(t0+0.1,L*1.4,{wave:'triangle',f:[f0*0.8,f0*1.1],v:[4,1],vib:6,vd:0.03,gain:0.6}); }
+  else { voice(t0,L*1.6,{wave:'sawtooth',f:[f0,f0*0.8],v:[0,2],vib:P.vib,gain:1}); }
+  // 副屬性質感點綴
+  const tt=t0+L*0.1;
+  if(P.t2!==P.t && !['rattle','crackle','hiss','chime','bubble','whisper'].includes(K)){
+    if(P.tex==='crackle') noise(tt,0.15,2500,2,0.35,'bandpass',0.6); else if(P.tex==='hiss') noise(tt,L,5000,1.5,0.3,'highpass',0.7); else if(P.tex==='chime') tone(tt+L*0.8,0.7,f0*3.1,'sine',0.28); else if(P.tex==='bubble') tone(tt,0.1,f0*1.2,'sine',0.3,f0*2.4); else if(P.tex==='rattle') for(let i=0;i<3;i++) noise(tt+i*0.04,0.03,3000,5,0.6); else noise(tt,L,2200,2.5,0.25,'bandpass',0.6);
   }
 }
 // ---------- 野外可見遊蕩的鬼怪（像劍盾的原野區） ----------
